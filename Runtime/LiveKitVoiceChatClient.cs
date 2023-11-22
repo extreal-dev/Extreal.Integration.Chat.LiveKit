@@ -82,13 +82,6 @@ namespace Extreal.Integration.Chat.LiveKit
         public async UniTask SetDevice(int deviceId)
             => audioCaptureOptions.DeviceId = deviceId.ToString();
 
-        private async UniTask<string> GetAccessToken(string accessTokenEndpoint, string roomName, string participantName)
-        {
-            var webRequest = await UnityWebRequest.Get($"{accessTokenEndpoint}?RoomName={roomName}&ParticipantName={participantName}").SendWebRequest();
-            var token = JsonUtility.FromJson<Token>(webRequest.downloadHandler.text);
-            return token.AccessToken;
-        }
-
         protected override void ReleaseManagedResources()
         {
             onMuted.Dispose();
@@ -96,13 +89,5 @@ namespace Extreal.Integration.Chat.LiveKit
 
             base.ReleaseManagedResources();
         }
-    }
-
-    [SuppressMessage("Usage", "IDE1006")]
-    public class Token
-    {
-        public string RoomName;
-        public string ParticipantName;
-        public string AccessToken;
     }
 }

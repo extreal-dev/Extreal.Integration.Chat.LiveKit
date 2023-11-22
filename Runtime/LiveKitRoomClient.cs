@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Cysharp.Threading.Tasks;
 using Extreal.Core.Common.System;
 using LiveKit;
@@ -37,6 +38,14 @@ namespace Extreal.Integration.Chat.LiveKit
             Room.Dispose();
 
             base.ReleaseManagedResources();
+        }
+
+        [SuppressMessage("Usage", "IDE1006")]
+        private class Token
+        {
+            public string RoomName;
+            public string ParticipantName;
+            public string AccessToken;
         }
     }
 }
