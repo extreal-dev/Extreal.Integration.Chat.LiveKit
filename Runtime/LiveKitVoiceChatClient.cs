@@ -1,12 +1,24 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using Cysharp.Threading.Tasks;
 using Extreal.Core.Common.System;
+using Extreal.Core.Logging;
+using LiveKit;
 using UniRx;
+using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Extreal.Integration.Chat.LiveKit
 {
     public class LiveKitVoiceChatClient : DisposableBase
     {
+        private static readonly ELogger Logger = LoggingManager.GetLogger(nameof(LiveKitVoiceChatClient));
+
+        private AudioCaptureOptions audioCaptureOptions = new AudioCaptureOptions();
+
+        private LiveKitRoomClient liveKitRoomClient;
+        private bool mute;
+
         public IObservable<bool> OnMuted => onMuted;
         private Subject<bool> onMuted = new Subject<bool>();
 
@@ -15,36 +27,82 @@ namespace Extreal.Integration.Chat.LiveKit
 
         }
 
-        public async UniTask StartClient(string accessTokenEndpoint, string livekitEndpoint, string roomName, string playerName)
+        public void InitializeTrackEvent(LiveKitRoomClient liveKitRoomClient)
         {
+            this.liveKitRoomClient = liveKitRoomClient;
+            this.liveKitRoomClient.Room.TrackSubscribed += (track, publication, participant) =>
+            {
+                if (track.Kind == TrackKind.Audio)
+                {
+                    if (Logger.IsDebug())
+                    {
+                        Logger.LogDebug($"Subscribed {participant.Name} 's audio track");
+                    }
+                    track.Attach();
+                }
+            };
 
+            this.liveKitRoomClient.Room.TrackUnsubscribed += (track, publication, participant) =>
+            {
+                if (track.Kind == TrackKind.Audio)
+                {
+                    if (Logger.IsDebug())
+                    {
+                        Logger.LogDebug($"Unsubscribed {participant.Name} 's audio track");
+                    }
+                    track.Detach();
+                }
+            };
         }
 
-        public async UniTask StopClient()
-        {
-
-        }
-
+        /// <summary>
+        /// Toggles mute or not.
+        /// </summary>
+        /// <returns></returns>
         public async UniTask ToggleMute()
         {
-
+            mute = !mute;
+            await liveKitRoomClient.Room.LocalParticipant.SetMicrophoneEnabled(mute, audioCaptureOptions);
         }
 
         public async UniTask SetVolume(float value)
         {
-
+            foreach (var participant in liveKitRoomClient.Room.Participants.Values)
+            {
+                Debug.Log($"participant.GetVolume(): {participant.GetVolume()}");
+                participant.SetVolume(value);
+            }
         }
 
+        /// <summary>
+        /// Set audio input device with id
+        /// </summary>
+        /// <param name="deviceId">device id</param>
+        /// <returns></returns>
         public async UniTask SetDevice(int deviceId)
-        {
+            => audioCaptureOptions.DeviceId = deviceId.ToString();
 
+        private async UniTask<string> GetAccessToken(string accessTokenEndpoint, string roomName, string participantName)
+        {
+            var webRequest = await UnityWebRequest.Get($"{accessTokenEndpoint}?RoomName={roomName}&ParticipantName={participantName}").SendWebRequest();
+            var token = JsonUtility.FromJson<Token>(webRequest.downloadHandler.text);
+            return token.AccessToken;
         }
 
         protected override void ReleaseManagedResources()
         {
             onMuted.Dispose();
+            liveKitRoomClient.Dispose();
 
             base.ReleaseManagedResources();
         }
+    }
+
+    [SuppressMessage("Usage", "IDE1006")]
+    public class Token
+    {
+        public string RoomName;
+        public string ParticipantName;
+        public string AccessToken;
     }
 }
