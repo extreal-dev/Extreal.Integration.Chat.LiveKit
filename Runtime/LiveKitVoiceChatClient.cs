@@ -1,20 +1,16 @@
 ﻿using System;
-using System.Diagnostics.CodeAnalysis;
 using Cysharp.Threading.Tasks;
 using Extreal.Core.Common.System;
 using Extreal.Core.Logging;
 using LiveKit;
 using UniRx;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace Extreal.Integration.Chat.LiveKit
 {
     public class LiveKitVoiceChatClient : DisposableBase
     {
         private static readonly ELogger Logger = LoggingManager.GetLogger(nameof(LiveKitVoiceChatClient));
-
-        private AudioCaptureOptions audioCaptureOptions = new AudioCaptureOptions();
 
         private LiveKitRoomClient liveKitRoomClient;
         private bool mute;
@@ -62,7 +58,12 @@ namespace Extreal.Integration.Chat.LiveKit
         public async UniTask ToggleMute()
         {
             mute = !mute;
-            await liveKitRoomClient.Room.LocalParticipant.SetMicrophoneEnabled(mute, audioCaptureOptions);
+            await liveKitRoomClient.Room.LocalParticipant.SetMicrophoneEnabled(!mute);
+            onMuted.OnNext(mute);
+            if (Logger.IsDebug())
+            {
+                Logger.LogDebug($"Mute: {mute}");
+            }
         }
 
         public async UniTask SetVolume(float value)
