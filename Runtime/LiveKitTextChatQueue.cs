@@ -1,11 +1,6 @@
-﻿using UnityEngine;
-
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
-
-using System.Runtime.InteropServices;
-using AOT;
+using LiveKit;
 
 namespace Extreal.Integration.Chat.LiveKit
 {
@@ -36,6 +31,11 @@ namespace Extreal.Integration.Chat.LiveKit
 
         public LiveKitTextChatQueue(string url, string roomName, LiveKitTextChatNetworkObject networkObj)
         {
+            // Extrealのロガーを追加
+            RequestQueue.Clear();
+            ResponseQueue.Clear();
+
+            // LiveKitを使用してサーバに接続
 
         }
 

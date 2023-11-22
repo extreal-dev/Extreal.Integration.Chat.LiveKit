@@ -1,6 +1,5 @@
-﻿
-
-using System;
+﻿using System;
+using UnityEngine;
 
 namespace Extreal.Integration.Chat.LiveKit
 {
@@ -12,17 +11,16 @@ namespace Extreal.Integration.Chat.LiveKit
 
         public LiveKitMessage(string topic, LiveKitTextChatNetworkObject payload)
         {
-
+            Topic = topic;
+            Payload = payload;
         }
 
         public LiveKitMessage(string topic)
         {
-
+            Topic = topic;
+            Payload = null;
         }
 
-        public string ToJson()
-        {
-            return string.Empty;
-        }
+        public string ToJson() => JsonUtility.ToJson(this);
     }
 }
