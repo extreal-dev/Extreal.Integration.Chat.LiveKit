@@ -4,7 +4,6 @@ using Extreal.Core.Common.System;
 using Extreal.Core.Logging;
 using LiveKit;
 using UniRx;
-using UnityEngine;
 
 namespace Extreal.Integration.Chat.LiveKit
 {
@@ -14,42 +13,86 @@ namespace Extreal.Integration.Chat.LiveKit
 
         private LiveKitRoomClient liveKitRoomClient;
         private bool mute;
+        private float volume;
 
         public IObservable<bool> OnMuted => onMuted;
         private Subject<bool> onMuted = new Subject<bool>();
 
-        public LiveKitVoiceChatClient()
+        private readonly CompositeDisposable disposables = new CompositeDisposable();
+
+        public LiveKitVoiceChatClient(LiveKitRoomClient liveKitRoomClient)
         {
 
         }
 
-        public void InitializeTrackEvent(LiveKitRoomClient liveKitRoomClient)
+        public async void InitializeTrackEvent(LiveKitRoomClient liveKitRoomClient)
         {
             this.liveKitRoomClient = liveKitRoomClient;
-            this.liveKitRoomClient.Room.TrackSubscribed += (track, publication, participant) =>
-            {
-                if (track.Kind == TrackKind.Audio)
-                {
-                    if (Logger.IsDebug())
-                    {
-                        Logger.LogDebug($"Subscribed {participant.Name} 's audio track");
-                    }
-                    track.Attach();
-                }
-            };
+            this.liveKitRoomClient.OnTrackSubscribed
+                .Subscribe(param => OnTrackSubscribed(param.track, param.publication, param.participant))
+                .AddTo(disposables);
 
-            this.liveKitRoomClient.Room.TrackUnsubscribed += (track, publication, participant) =>
+            this.liveKitRoomClient.OnTrackUnsubscribed
+                .Subscribe(param => OnTrackUnsubscribed(param.track, param.publication, param.participant))
+                .AddTo(disposables);
+
+            this.liveKitRoomClient.OnActiveSpeakersChanged
+                .Subscribe(OnActiveSpeakersChanged)
+                .AddTo(disposables);
+
+            this.liveKitRoomClient.OnParticipantConnected
+                .Subscribe(OnParticipantConnected)
+                .AddTo(disposables);
+
+            if (Logger.IsDebug())
             {
-                if (track.Kind == TrackKind.Audio)
+                var localDevicesPromise = Room.GetLocalDevices(MediaDeviceKind.AudioInput, true);
+                await localDevicesPromise;
+                var localDevices = localDevicesPromise.ResolveValue;
+                foreach (var localDevice in localDevices)
                 {
-                    if (Logger.IsDebug())
-                    {
-                        Logger.LogDebug($"Unsubscribed {participant.Name} 's audio track");
-                    }
-                    track.Detach();
+                    Logger.LogDebug($"DeviceId: {localDevice.DeviceId}, GroupId: {localDevice.GroupId}, Label: {localDevice.Label}");
                 }
-            };
+            }
         }
+
+        private void OnTrackSubscribed(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+        {
+            if (track.Kind == TrackKind.Audio)
+            {
+                if (Logger.IsDebug())
+                {
+                    Logger.LogDebug($"Subscribed {participant.Identity} 's audio track");
+                }
+                track.Attach();
+            }
+        }
+
+        private void OnTrackUnsubscribed(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+        {
+            if (track.Kind == TrackKind.Audio)
+            {
+                if (Logger.IsDebug())
+                {
+                    Logger.LogDebug($"Unsubscribed {participant.Identity} 's audio track");
+                }
+                track.Detach();
+            }
+        }
+
+        private void OnActiveSpeakersChanged(JSArray<Participant> speakers)
+        {
+            foreach (var speaker in speakers)
+            {
+                if (Logger.IsDebug())
+                {
+                    Logger.LogDebug($"{speaker.Identity}: {speaker.AudioLevel}");
+                }
+            }
+        }
+
+        private void OnParticipantConnected(RemoteParticipant participant)
+            => participant.SetVolume(volume);
 
         /// <summary>
         /// Toggles mute or not.
@@ -58,7 +101,7 @@ namespace Extreal.Integration.Chat.LiveKit
         public async UniTask ToggleMute()
         {
             mute = !mute;
-            await liveKitRoomClient.Room.LocalParticipant.SetMicrophoneEnabled(!mute);
+            await liveKitRoomClient.SetMicrophoneEnabled(!mute);
             onMuted.OnNext(mute);
             if (Logger.IsDebug())
             {
@@ -66,27 +109,19 @@ namespace Extreal.Integration.Chat.LiveKit
             }
         }
 
-        public async UniTask SetVolume(float value)
+        public void SetVolume(float value)
         {
-            foreach (var participant in liveKitRoomClient.Room.Participants.Values)
+            foreach (var participant in liveKitRoomClient.Participants.Values)
             {
-                Debug.Log($"participant.GetVolume(): {participant.GetVolume()}");
-                participant.SetVolume(value);
+                volume = value;
+                participant.SetVolume(volume);
             }
         }
-
-        /// <summary>
-        /// Set audio input device with id
-        /// </summary>
-        /// <param name="deviceId">device id</param>
-        /// <returns></returns>
-        public async UniTask SetDevice(int deviceId)
-            => audioCaptureOptions.DeviceId = deviceId.ToString();
 
         protected override void ReleaseManagedResources()
         {
             onMuted.Dispose();
-            liveKitRoomClient.Dispose();
+            disposables.Dispose();
 
             base.ReleaseManagedResources();
         }
