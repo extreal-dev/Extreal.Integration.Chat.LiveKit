@@ -1,3 +1,4 @@
+using System.ComponentModel.Design;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using Cysharp.Threading.Tasks;
@@ -15,7 +16,7 @@ namespace Extreal.Integration.Chat.LiveKit
 
         private readonly Room room = new Room();
 
-        public IObservable<(byte[], RemoteParticipant, DataPacketKind?)> OnDataReceived => onDataReceived;
+        public IObservable<(byte[] data, RemoteParticipant participant, DataPacketKind? kind)> OnDataReceived => onDataReceived;
         private readonly Subject<(byte[], RemoteParticipant, DataPacketKind?)> onDataReceived = new Subject<(byte[], RemoteParticipant, DataPacketKind?)>();
 
         public IObservable<(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)> OnTrackSubscribed => onTrackSubscribed;
@@ -30,10 +31,22 @@ namespace Extreal.Integration.Chat.LiveKit
         public IObservable<RemoteParticipant> OnParticipantConnected => onParticipantConnected;
         private readonly Subject<RemoteParticipant> onParticipantConnected = new Subject<RemoteParticipant>();
 
+        public IObservable<RemoteParticipant> OnParticipantDisconnected => onParticipantDisconnected;
+        private readonly Subject<RemoteParticipant> onParticipantDisconnected = new Subject<RemoteParticipant>();
+
         public JSMap<string, RemoteParticipant> Participants => room.Participants;
 
         public LiveKitRoomClient(LiveKitConfig liveKitConfig)
-            => this.liveKitConfig = liveKitConfig;
+        {
+            this.liveKitConfig = liveKitConfig;
+
+            room.DataReceived += DataReceivedHandler;
+            room.TrackSubscribed += TrackSubscribedHandler;
+            room.TrackUnsubscribed += TrackUnsubscribedHandler;
+            room.ActiveSpeakersChanged += ActiveSpeakersChangedHandler;
+            room.ParticipantConnected += ParticipantConnectedHandler;
+            room.ParticipantDisconnected += ParticipantDisconnectedHandler;
+        }
 
         public async UniTask StartClientAsync(string roomName, string playerName)
         {
@@ -50,6 +63,24 @@ namespace Extreal.Integration.Chat.LiveKit
         }
 
         public void StopClient() => room.Disconnect();
+
+        private void DataReceivedHandler(byte[] data, RemoteParticipant participant, DataPacketKind? kind)
+            => onDataReceived.OnNext((data, participant, kind));
+
+        private void TrackSubscribedHandler(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+            => onTrackSubscribed.OnNext((track, publication, participant));
+
+        private void TrackUnsubscribedHandler(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+            => onTrackUnsubscribed.OnNext((track, publication, participant));
+
+        private void ActiveSpeakersChangedHandler(JSArray<Participant> speakers)
+            => onActiveSpeakersChanged.OnNext(speakers);
+
+        private void ParticipantConnectedHandler(RemoteParticipant participant)
+            => onParticipantConnected.OnNext(participant);
+
+        private void ParticipantDisconnectedHandler(RemoteParticipant participant)
+            => onParticipantDisconnected.OnNext(participant);
 
         public async UniTask SetMicrophoneEnabled(bool value)
             => await room.LocalParticipant.SetMicrophoneEnabled(value);
