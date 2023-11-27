@@ -1,7 +1,9 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 using Cysharp.Threading.Tasks;
 using Extreal.Core.Common.System;
 using LiveKit;
+using UniRx;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -9,18 +11,35 @@ namespace Extreal.Integration.Chat.LiveKit
 {
     public class LiveKitRoomClient : DisposableBase
     {
-        public Room Room { get; } = new Room();
+        private readonly LiveKitConfig liveKitConfig;
 
-        public LiveKitRoomClient()
+        private readonly Room room = new Room();
+
+        public IObservable<(byte[], RemoteParticipant, DataPacketKind?)> OnDataReceived => onDataReceived;
+        private readonly Subject<(byte[], RemoteParticipant, DataPacketKind?)> onDataReceived = new Subject<(byte[], RemoteParticipant, DataPacketKind?)>();
+
+        public IObservable<(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)> OnTrackSubscribed => onTrackSubscribed;
+        private readonly Subject<(RemoteTrack, RemoteTrackPublication, RemoteParticipant)> onTrackSubscribed = new Subject<(RemoteTrack, RemoteTrackPublication, RemoteParticipant)>();
+
+        public IObservable<(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)> OnTrackUnsubscribed => onTrackUnsubscribed;
+        private readonly Subject<(RemoteTrack, RemoteTrackPublication, RemoteParticipant)> onTrackUnsubscribed = new Subject<(RemoteTrack, RemoteTrackPublication, RemoteParticipant)>();
+
+        public IObservable<JSArray<Participant>> OnActiveSpeakersChanged => onActiveSpeakersChanged;
+        private readonly Subject<JSArray<Participant>> onActiveSpeakersChanged = new Subject<JSArray<Participant>>();
+
+        public IObservable<RemoteParticipant> OnParticipantConnected => onParticipantConnected;
+        private readonly Subject<RemoteParticipant> onParticipantConnected = new Subject<RemoteParticipant>();
+
+        public JSMap<string, RemoteParticipant> Participants => room.Participants;
+
+        public LiveKitRoomClient(LiveKitConfig liveKitConfig)
+            => this.liveKitConfig = liveKitConfig;
+
+        public async UniTask StartClientAsync(string roomName, string playerName)
         {
+            var accessToken = await GetAccessToken(liveKitConfig.AccessTokenUrl, roomName, playerName);
 
-        }
-
-        public async UniTask StartClientAsync(string accessTokenEndpoint, string livekitEndpoint, string roomName, string playerName)
-        {
-            var accessToken = await GetAccessToken(accessTokenEndpoint, roomName, playerName);
-
-            await Room.Connect(livekitEndpoint, accessToken);
+            await room.Connect(liveKitConfig.ServerUrl, accessToken);
         }
 
         private async UniTask<string> GetAccessToken(string accessTokenEndpoint, string roomName, string participantName)
@@ -30,12 +49,21 @@ namespace Extreal.Integration.Chat.LiveKit
             return token.AccessToken;
         }
 
-        public void StopClient() => Room.Disconnect();
+        public void StopClient() => room.Disconnect();
+
+        public async UniTask SetMicrophoneEnabled(bool value)
+            => await room.LocalParticipant.SetMicrophoneEnabled(value);
 
         protected override void ReleaseManagedResources()
         {
-            Room.Disconnect();
-            Room.Dispose();
+            room.Disconnect();
+            room.Dispose();
+
+            onDataReceived.Dispose();
+            onTrackSubscribed.Dispose();
+            onTrackUnsubscribed.Dispose();
+            onActiveSpeakersChanged.Dispose();
+            onParticipantConnected.Dispose();
 
             base.ReleaseManagedResources();
         }
