@@ -11,29 +11,34 @@ namespace Extreal.Integration.Chat.LiveKit
     {
         private static readonly ELogger Logger = LoggingManager.GetLogger(nameof(LiveKitVoiceChatClient));
 
-        private LiveKitRoomClient liveKitRoomClient;
+        private readonly LiveKitRoomClient liveKitRoomClient;
         private bool mute;
         private float volume;
 
         public IObservable<bool> OnMuted => onMuted;
-        private Subject<bool> onMuted = new Subject<bool>();
+        private readonly Subject<bool> onMuted = new Subject<bool>();
+
+        public IObservable<float> OnVolumeChanged => onVolumeChanged;
+        private readonly Subject<float> onVolumeChanged = new Subject<float>();
 
         private readonly CompositeDisposable disposables = new CompositeDisposable();
 
-        public LiveKitVoiceChatClient(LiveKitRoomClient liveKitRoomClient)
-        {
-
-        }
-
-        public async void InitializeTrackEvent(LiveKitRoomClient liveKitRoomClient)
+        public LiveKitVoiceChatClient(
+            LiveKitRoomClient liveKitRoomClient,
+            LiveKitVoiceChatConfig livekitVoiceChatConfig
+        )
         {
             this.liveKitRoomClient = liveKitRoomClient;
+
+            mute = livekitVoiceChatConfig.InitialMute;
+            volume = livekitVoiceChatConfig.InitialVolume;
+
             this.liveKitRoomClient.OnTrackSubscribed
-                .Subscribe(param => OnTrackSubscribed(param.track, param.publication, param.participant))
+                .Subscribe(param => OnTrackSubscribed(param.track, param.participant))
                 .AddTo(disposables);
 
             this.liveKitRoomClient.OnTrackUnsubscribed
-                .Subscribe(param => OnTrackUnsubscribed(param.track, param.publication, param.participant))
+                .Subscribe(param => OnTrackUnsubscribed(param.track, param.participant))
                 .AddTo(disposables);
 
             this.liveKitRoomClient.OnActiveSpeakersChanged
@@ -43,20 +48,9 @@ namespace Extreal.Integration.Chat.LiveKit
             this.liveKitRoomClient.OnParticipantConnected
                 .Subscribe(OnParticipantConnected)
                 .AddTo(disposables);
-
-            if (Logger.IsDebug())
-            {
-                var localDevicesPromise = Room.GetLocalDevices(MediaDeviceKind.AudioInput, true);
-                await localDevicesPromise;
-                var localDevices = localDevicesPromise.ResolveValue;
-                foreach (var localDevice in localDevices)
-                {
-                    Logger.LogDebug($"DeviceId: {localDevice.DeviceId}, GroupId: {localDevice.GroupId}, Label: {localDevice.Label}");
-                }
-            }
         }
 
-        private void OnTrackSubscribed(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+        private void OnTrackSubscribed(RemoteTrack track, RemoteParticipant participant)
         {
             if (track.Kind == TrackKind.Audio)
             {
@@ -68,7 +62,7 @@ namespace Extreal.Integration.Chat.LiveKit
             }
         }
 
-        private void OnTrackUnsubscribed(RemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+        private void OnTrackUnsubscribed(RemoteTrack track, RemoteParticipant participant)
         {
             if (track.Kind == TrackKind.Audio)
             {
