@@ -85,6 +85,9 @@ namespace Extreal.Integration.Chat.LiveKit
         public async UniTask SetMicrophoneEnabled(bool value)
             => await room.LocalParticipant.SetMicrophoneEnabled(value);
 
+        public void PublishData(byte[] data, DataPacketKind kind)
+            => room.LocalParticipant.PublishData(data, kind);
+
         protected override void ReleaseManagedResources()
         {
             room.Disconnect();

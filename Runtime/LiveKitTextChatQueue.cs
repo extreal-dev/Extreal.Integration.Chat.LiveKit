@@ -1,21 +1,47 @@
 ﻿using System.Collections.Generic;
+using System.Text;
 using Cysharp.Threading.Tasks;
+using Extreal.Core.Logging;
 using LiveKit;
+using Extreal.Core.Common.System;
+using UniRx;
 
 namespace Extreal.Integration.Chat.LiveKit
 {
-    public class LiveKitTextChatQueue
+    public class LiveKitTextChatQueue : DisposableBase
     {
-        // リクエストキュー
+        private static readonly ELogger Logger = LoggingManager.GetLogger(nameof(LiveKitTextChatClient));
         public Queue<LiveKitMessage> RequestQueue = new Queue<LiveKitMessage>();
-
-        // レスポンスキュー
         public static Queue<LiveKitMessage> ResponseQueue = new Queue<LiveKitMessage>();
 
-        public int ResponseQueueCount()
+        private LiveKitRoomClient liveKitRoomClient;
+        private readonly CompositeDisposable disposable = new CompositeDisposable();
+
+        public LiveKitTextChatQueue(LiveKitRoomClient liveKitRoomClient)
         {
-            return ResponseQueue.Count;
+            this.liveKitRoomClient = liveKitRoomClient;
+
+            liveKitRoomClient.OnDataReceived
+                .Subscribe(param => OnDataReceived(param.data, param.participant, param.kind))
+                .AddTo(disposable);
+
+            RequestQueue.Clear();
+            ResponseQueue.Clear();
         }
+
+        private void OnDataReceived(byte[] data, RemoteParticipant participant, DataPacketKind? kind)
+        {
+            if (Logger.IsDebug())
+            {
+                var msg = Encoding.UTF8.GetString(data);
+                Logger.LogDebug($"Received Message {msg}");
+            }
+        }
+
+        /// <summary>
+        /// Return the number of response queues
+        /// </summary>
+        public int ResponseQueueCount() => ResponseQueue.Count;
 
         public LiveKitMessage DequeueResponse()
         {
@@ -29,27 +55,38 @@ namespace Extreal.Integration.Chat.LiveKit
             }
         }
 
-        public LiveKitTextChatQueue(string url, string roomName, LiveKitTextChatNetworkObject networkObj)
+        /// <summary>
+        /// Constantly check the request queue and process sending messages.
+        /// </summary>
+        public async UniTask QueueCheck()
         {
-            // Extrealのロガーを追加
+            while (RequestQueue.Count > 0)
+            {
+                LiveKitMessage liveKitMessage = RequestQueue.Dequeue();
+                string jsonLiveKitMessage = liveKitMessage.ToJson();
+
+                liveKitRoomClient.PublishData(Encoding.ASCII.GetBytes(jsonLiveKitMessage), DataPacketKind.RELIABLE);
+            }
+        }
+
+        protected override void ReleaseManagedResources()
+        {
+            if (Logger.IsDebug())
+            {
+                Logger.LogDebug($"Close");
+            }
+
             RequestQueue.Clear();
             ResponseQueue.Clear();
 
-            // LiveKitを使用してサーバに接続
+            liveKitRoomClient.StopClient();
 
-        }
+            if (Logger.IsDebug())
+            {
+                Logger.LogDebug($"Disconnected");
+            }
 
-        public async UniTask Connect()
-        {
-
-        }
-
-        public async UniTask Update()
-        {
-        }
-
-        public async UniTask Close()
-        {
+            base.ReleaseManagedResources();
         }
     }
 }
