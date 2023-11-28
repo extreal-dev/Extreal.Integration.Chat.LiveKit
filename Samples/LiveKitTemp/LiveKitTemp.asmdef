@@ -1,0 +1,23 @@
+{
+    "name": "LiveKitTemp",
+    "rootNamespace": "",
+    "references": [
+        "GUID:e852bd3e8b74f9249aee46d154e717ed",
+        "GUID:ae3e71e072a29bd4fb43afb30ec62dd1",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:560b04d1a97f54a4e82edc0cbbb69285",
+        "GUID:b0214a6008ed146ff8f122a6a9c2f6cc",
+        "GUID:ec6dbf8e6c214e9448b5b4261c4f04c1",
+        "GUID:b8d918b3ff5e05e4ba23a5c2512f52fe",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
